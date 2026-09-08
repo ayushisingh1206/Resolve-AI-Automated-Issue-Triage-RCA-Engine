@@ -9,6 +9,10 @@
 ![Docker](https://img.shields.io/badge/Docker-Microservices-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-Persistence-4479A1?style=flat-square&logo=mysql&logoColor=white)
 
+<br>
+
+![Resolve AI System Architecture](./architecture-diagram.png)
+
 ---
 
 ## 1. Project Overview
@@ -32,10 +36,6 @@ This project was built to demonstrate production-style AI integration within a d
 ---
 
 ## 2. Architecture Overview
-
-*(Upload your HLD image to a `docs` folder in your repo and it will appear here)*
-
-![Resolve AI System Architecture](./docs/architecture-diagram.png)
 
 ### Request Lifecycle
 1. Client/Monitoring Tool sends a POST webhook to `api-gateway`.
