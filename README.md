@@ -190,4 +190,18 @@ Resolve AI supports the end-to-end incident lifecycle:
   "stack_trace": "com.mysql.cj.jdbc.exceptions.CommunicationsException...",
   "timestamp": "2026-09-08T10:00:00Z"
 }
+```
 
+**Sample response:**
+```json
+{
+  "success": true,
+  "status": 202,
+  "message": "Alert queued successfully",
+  "data": {
+    "jobId": "job_01J7A29M8X9N3R",
+    "fingerprint": "fp_pay_npe_charge"
+  },
+  "timestamp": "2026-09-08T10:00:01Z"
+}
+```
