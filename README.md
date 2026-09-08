@@ -205,3 +205,101 @@ Resolve AI supports the end-to-end incident lifecycle:
   "timestamp": "2026-09-08T10:00:01Z"
 }
 ```
+
+### Triage Service (`/api/triage`, `/api/internal`)
+
+**Deduplication & Search:**
+* `GET /api/v1/triage/match/{fingerprint}`
+* `POST /api/v1/triage/evaluate-similarity`
+* `GET /api/v1/triage/clusters?service={serviceName}`
+
+**Embeddings:**
+* `POST /api/v1/triage/embeddings/generate`
+* `DELETE /api/v1/triage/embeddings/{ticketId}`
+
+**Internal:**
+* `GET /api/internal/triage/similarity-threshold`
+* `POST /api/internal/triage/sync-vector-db`
+
+### AI-Core Service (`/api/rca`, `/api/internal`)
+
+**RCA Generation:**
+* `POST /api/v1/rca/generate`
+* `GET /api/v1/rca/{incidentId}`
+* `PATCH /api/v1/rca/{incidentId}/feedback` (Thumbs up/down for LLM accuracy)
+
+**Prompts & Config:**
+* `GET /api/v1/rca/prompts/active`
+* `PUT /api/v1/rca/prompts/{templateId}`
+
+**Internal:**
+* `POST /api/internal/rca/context-enrich`
+
+**Sample request (`POST /api/v1/rca/generate`):**
+```json
+{
+  "incidentId": "inc_90124",
+  "errorSignature": "NullPointerException: Cannot read field 'balance' of null",
+  "recentCommits": [
+    {
+      "hash": "b47f91c",
+      "author": "dev@company.com"
+    }
+  ]
+}
+```
+
+### Audit & Ticket Service (`/api/tickets`, `/api/internal`)
+
+**Tickets (Read/Write):**
+* `GET /api/v1/tickets?page=0&size=10&status=OPEN`
+* `GET /api/v1/tickets/{ticketId}`
+* `PATCH /api/v1/tickets/{ticketId}/status`
+* `GET /api/v1/tickets/{ticketId}/rca`
+* `GET /api/v1/tickets/{ticketId}/audit-trail`
+
+**Analytics:**
+* `GET /api/v1/tickets/analytics/mttr`
+* `GET /api/v1/tickets/analytics/duplicate-ratio`
+
+**Internal:**
+* `POST /api/internal/tickets/create`
+* `POST /api/internal/audit-trail/log`
+
+### Notification Service (`/api/notifications`, `/api/internal`)
+
+**Feed & Dispatch:**
+* `GET /api/v1/notifications?page=0&size=10&isRead=false`
+* `GET /api/v1/notifications/unread-count`
+* `PATCH /api/v1/notifications/{notificationId}/read`
+* `PATCH /api/v1/notifications/read-all`
+
+**Integrations:**
+* `POST /api/v1/notifications/slack/webhook`
+* `POST /api/v1/notifications/jira/sync`
+
+**Internal:**
+* `POST /api/internal/notifications/dispatch`
+
+### Error Response Pattern
+
+All services use a consistent error envelope mapped via `@RestControllerAdvice`:
+```json
+{
+  "success": false,
+  "error": {
+    "type": "VALIDATION|BUSINESS|AUTH|DOWNSTREAM_TIMEOUT",
+    "code": "ERR_INVALID_PAYLOAD",
+    "message": "Human readable message",
+    "status": 400,
+    "timestamp": "2026-09-08T10:00:01Z",
+    "path": "/api/v1/alerts/ingest",
+    "errors": [
+      {
+        "field": "source",
+        "message": "must not be blank"
+      }
+    ]
+  }
+}
+```
