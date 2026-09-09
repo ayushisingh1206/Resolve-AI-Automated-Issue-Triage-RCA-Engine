@@ -513,3 +513,103 @@ web/
 * `docker/docker-compose/local` : infra-only for running services from IDE
 * `docker/docker-compose/observability` : monitoring/logging stack configs
 * `web` : React-based incident triage and RCA dashboard
+
+
+## 15. Design Patterns & Best Practices Used
+
+* Layered architecture (controller -> service -> repository)
+* DTO mapping (raw webhook payloads, internal events, HTTP responses)
+* Retrieval-Augmented Generation (RAG) for LLM context enrichment
+* Event-driven architecture with Kafka topic routing
+* CQRS (Command Query Responsibility Segregation) separating fast Kafka ingestion from MySQL read/audit queries
+* Idempotency guards (Vector DB similarity thresholds to prevent duplicate RCA processing)
+* Circuit breaker + retry (Resilience4j) for external LLM API calls
+* Standardized response/error wrapper
+* Centralized exception handling per service (`@RestControllerAdvice`)
+* Security boundary with gateway + internal API segregation
+
+## 16. Setup Guide
+
+**Prerequisites**
+
+* Java 21
+* Maven 3.9+
+* Docker Desktop
+* OpenAI API Key (or local LLM setup)
+
+**Option A: Full Docker (recommended)**
+
+```bash
+cd docker/docker-compose/dev
+cp .env.example .env
+# Add your OPENAI_API_KEY to .env
+docker-compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d
+```
+**Access:**
+* API Gateway: `http://localhost:8080`
+* Eureka: `http://localhost:8761`
+* Grafana: `http://localhost:3000`
+* Prometheus: `http://localhost:9090`
+* Kafka UI (Optional): `http://localhost:8081`
+
+**Option B: Run infra in Docker, services from IDE**
+
+```bash
+cd docker/docker-compose/local
+docker-compose up -d
+
+Then start services in this exact order:
+1. `config-server`
+2. `eureka-server`
+3. `ingestion`, `triage`, `ai-core`, `audit-storage`, `notification`
+4. `api-gateway`
+```
+
+## 17. Testing
+
+**Current Test Coverage in Repo**
+* Basic Spring Boot context tests present in all services (`*ApplicationTests`).
+
+**How to Run**
+```bash
+# service-wise
+cd services/ai-core && mvn test
+cd services/triage && mvn test
+# repeat for others
+```
+
+**API Testing**
+* Use Postman/Insomnia through the gateway (`localhost:8080`).
+* Authenticate first by providing the `X-API-Key` header for protected webhook flows.
+* Validate async side effects (vector embeddings creation, RCA generation, Slack notifications) by checking the `audit-storage` database states.
+
+
+## 18. Future Improvements
+
+* Add a dedicated DLQ processing UI for failed Kafka events.
+* Complete OpenTelemetry rollout with distributed trace propagation across all Spring AI boundaries.
+* Add Testcontainers-based integration tests for MySQL, PgVector, and Kafka.
+* Introduce CI pipeline (GitHub Actions) for unit/integration/security checks.
+* Externalize secrets to HashiCorp Vault or AWS Secrets Manager for production.
+* Add Kubernetes manifests/Helm charts and HPA policy for scale-out.
+* Implement local LLM support (Ollama/vLLM) for fully air-gapped, on-premise RCA generation.
+
+---
+
+## Appendix: Quick API Catalog
+
+**Public/Client APIs by Service**
+* **Ingestion:** `/api/v1/alerts/*`
+* **Triage:** `/api/v1/triage/*`
+* **AI-Core:** `/api/v1/rca/*`
+* **Audit-Storage:** `/api/v1/tickets/*`
+* **Notification:** `/api/v1/notifications/*`
+
+**Internal APIs (service-to-service)**
+* `/api/internal/alerts/*`
+* `/api/internal/triage/*`
+* `/api/internal/rca/*`
+* `/api/internal/tickets/*`
+* `/api/internal/notifications/*`
+
+*Note: Gateway blocks external access to internal endpoints.*
