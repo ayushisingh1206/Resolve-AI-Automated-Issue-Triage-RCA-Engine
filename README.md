@@ -1,17 +1,15 @@
 # Resolve AI ⚡
 
-**Enterprise-grade event-driven AIOps platform built using Spring Boot microservices, Apache Kafka, Spring AI, and vector databases for automated support ticket triage and Root Cause Analysis (RCA).**
+Enterprise-grade event-driven AIOps platform built using Spring Boot microservices, Apache Kafka, Spring AI, and vector databases for automated support ticket triage and Root Cause Analysis (RCA).
 
-![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4-6DB33F?style=flat-square&logo=springboot&logoColor=white)
-![Spring AI](https://img.shields.io/badge/Spring_AI-LangChain4j-6DB33F?style=flat-square)
-![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-Event_Driven-231F20?style=flat-square&logo=apachekafka&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Microservices-2496ED?style=flat-square&logo=docker&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-Persistence-4479A1?style=flat-square&logo=mysql&logoColor=white)
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.x-brightgreen)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-enabled-blue)
+![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-event--driven-black)
+![Docker](https://img.shields.io/badge/Docker-containerized-2496ED)
+![MySQL](https://img.shields.io/badge/MySQL-relational%20store-4479A1)
 
-<br>
-
-![Resolve AI System Architecture](./architecture-diagram.png)
+<!-- ![Resolve AI System Architecture](./docs/architecture-diagram.png) -->
 
 ---
 
@@ -72,27 +70,26 @@ Resolve AI supports the end-to-end incident lifecycle:
 
 **Core Modules**
 
-* Ingress routing and rate limiting (api-gateway)
-* Alert webhook validation and publishing (ingestion)
-* Semantic search and deduplication (triage)
-* LLM reasoning and RAG orchestration (ai-core)
-* Relational state persistence and auditing (audit-storage)
-* Alert dispatching (notification)
+* Ingress routing and rate limiting (`api-gateway`)
+* Alert webhook validation and publishing (`ingestion`)
+* Semantic search and deduplication (`triage`)
+* LLM reasoning and RAG orchestration (`ai-core`)
+* Relational state persistence and auditing (`audit-storage`)
+* Alert dispatching (`notification`)
 * Infra: Apache Kafka, MySQL, Vector DB, Redis
 
+---
 
 ## 3. Architecture Overview
-
-![Resolve AI System Architecture](./architecture-diagram.png)
 
 **High-Level Architecture**
 
 * **API Gateway:** Single ingress point, API key validation, and route-level rate limiting.
 * **Domain Services:** 5 independent Spring Boot microservices (Ingestion, Triage, AI-Core, Audit, Notification).
-* **Datastores:** 
-  * **MySQL:** Relational persistence for ticket states, RCAs, and audit trails.
-  * **Vector Database:** Stores high-dimensional text embeddings for semantic deduplication.
-  * **Redis:** In-memory caching for API Gateway rate-limiting.
+* **Datastores:**
+  * MySQL: Relational persistence for ticket states, RCAs, and audit trails.
+  * Vector Database: Stores high-dimensional text embeddings for semantic deduplication.
+  * Redis: In-memory caching for API Gateway rate-limiting.
 * **Messaging:** Apache Kafka handles high-throughput event ingestion and decouples the AI processing pipeline.
 * **AI Integration:** Spring AI / LangChain4j orchestrates LLM classification and RAG pipelines.
 * **Observability:** Spring Boot Actuator, Micrometer, Prometheus, and Grafana for metrics and Kafka lag monitoring.
@@ -101,7 +98,7 @@ Resolve AI supports the end-to-end incident lifecycle:
 
 1. Monitoring tool (Client) sends an alert payload to `api-gateway`.
 2. Gateway validates API keys and forwards the request to the `ingestion-service`.
-3. `ingestion-service` immediately publishes the raw event to the Kafka topic (`alert.received`) and returns a 202 Accepted response to prevent timeouts.
+3. `ingestion-service` immediately publishes the raw event to the Kafka topic (`alert.received`) and returns a `202 Accepted` response to prevent timeouts.
 4. `triage-service` consumes the event, generates embeddings, queries the Vector DB for duplicates, and publishes to `alert.triaged`.
 5. `ai-core-service` consumes the triaged event, builds the prompt context, calls the LLM for RCA generation, and publishes to `rca.generated`.
 6. `audit-storage` independently listens to all Kafka topics to maintain a real-time state machine in MySQL.
@@ -113,39 +110,40 @@ Resolve AI supports the end-to-end incident lifecycle:
 
 **Architectural Decisions**
 
-* **Event-driven ingestion** ensures that spikes in monitoring alerts do not crash the system or cause webhook timeouts while waiting for LLM processing.
-* **Vector-based deduplication** handles slight variations in error messages and stack traces much better than exact string matching.
+* Event-driven ingestion ensures that spikes in monitoring alerts do not crash the system or cause webhook timeouts while waiting for LLM processing.
+* Vector-based deduplication handles slight variations in error messages and stack traces much better than exact string matching.
 * **CQRS Pattern:** The system separates the write/command path (Kafka event streams) from the read/query path (MySQL audit database).
-* **Gateway-centric security** offloads API key validation, keeping internal microservices focused purely on business logic.
+* Gateway-centric security offloads API key validation, keeping internal microservices focused purely on business logic.
 
+---
 
 ## 4. Tech Stack Documentation
 
-### Backend
+**Backend**
 
 | Technology | What it is | Why chosen / Problem solved |
-| :--- | :--- | :--- |
-| **Java 21** | LTS JVM runtime | Modern language/runtime; uses Virtual Threads for high-throughput AI API calls. |
-| **Spring Boot 3.4.x** | App framework | Rapid service bootstrap with production-ready actuator features. |
-| **Spring AI** | AI integration framework | Standardized interface for LLM orchestration and Vector DB connectivity. |
-| **Spring Cloud Gateway** | Reactive API gateway | Centralized routing, API key validation, and rate limiting. |
-| **Apache Kafka** | Event streaming broker | Decouples webhook ingestion from slow LLM inference, ensuring no dropped alerts. |
-| **OpenFeign** | Declarative HTTP client | Simple inter-service synchronous calls for dashboard reads. |
-| **Spring Data JPA** | ORM | Relational domain persistence for audit trails. |
-| **Flyway** | DB migration | Versioned schema changes for MySQL. |
-| **Redis** | In-memory data store | Gateway rate limiting and short-term caching. |
+|---|---|---|
+| Java 21 | LTS JVM runtime | Modern language/runtime; uses Virtual Threads for high-throughput AI API calls. |
+| Spring Boot 3.4.x | App framework | Rapid service bootstrap with production-ready actuator features. |
+| Spring AI | AI integration framework | Standardized interface for LLM orchestration and Vector DB connectivity. |
+| Spring Cloud Gateway | Reactive API gateway | Centralized routing, API key validation, and rate limiting. |
+| Apache Kafka | Event streaming broker | Decouples webhook ingestion from slow LLM inference, ensuring no dropped alerts. |
+| OpenFeign | Declarative HTTP client | Simple inter-service synchronous calls for dashboard reads. |
+| Spring Data JPA | ORM | Relational domain persistence for audit trails. |
+| Flyway | DB migration | Versioned schema changes for MySQL. |
+| Redis | In-memory data store | Gateway rate limiting and short-term caching. |
 
-### Database & Persistence
+**Database & Persistence**
 
 * **MySQL:** Maintains strong transactional consistency for ticket lifecycle, audit logs, and final RCA reports.
 * **Vector Database (PgVector / Milvus):** Stores high-dimensional textual embeddings of error logs to perform rapid cosine-similarity searches for deduplication.
 
-### Containerization & Build
+**Containerization & Build**
 
 * **Docker & Docker Compose:** Used for spinning up isolated dev, local, and observability stacks.
 * **Maven:** Dependency management and build lifecycle.
 
-### Observability
+**Observability**
 
 * **Prometheus:** Metrics scraping (Kafka lag, LLM latency).
 * **Grafana:** Dashboards for visualizing system health and alert ingestion rates.
@@ -156,13 +154,13 @@ Resolve AI supports the end-to-end incident lifecycle:
 ## 5. Complete Microservice Breakdown
 
 | Service | Port | Purpose | Database | Key Dependencies |
-| :--- | :--- | :--- | :--- | :--- |
-| **api-gateway** | 8080 | Ingress routing, API Key validation, Rate limiting | Redis | - |
-| **ingestion** | 8081 | Alert webhook validation and Kafka publishing | - | Kafka Producer |
-| **triage** | 8082 | Generates embeddings, semantic duplicate checking | Vector DB | Kafka, Spring AI |
-| **ai-core** | 8083 | LLM classification, RAG context building, RCA generation | - | Kafka, Spring AI, LLM API |
-| **audit-storage**| 8084 | Persists state changes and RCA results via JPA | MySQL | Kafka Consumer |
-| **notification** | 8085 | Dispatches completed RCAs to Slack/Jira | - | Kafka Consumer |
+|---|---|---|---|---|
+| api-gateway | 8080 | Ingress routing, API Key validation, Rate limiting | Redis | - |
+| ingestion | 8081 | Alert webhook validation and Kafka publishing | - | Kafka Producer |
+| triage | 8082 | Generates embeddings, semantic duplicate checking | Vector DB | Kafka, Spring AI |
+| ai-core | 8083 | LLM classification, RAG context building, RCA generation | - | Kafka, Spring AI, LLM API |
+| audit-storage | 8084 | Persists state changes and RCA results via JPA | MySQL | Kafka Consumer |
+| notification | 8085 | Dispatches completed RCAs to Slack/Jira | - | Kafka Consumer |
 
 ---
 
@@ -175,11 +173,12 @@ Resolve AI supports the end-to-end incident lifecycle:
 
 ### Ingestion Service (`/api/v1/alerts`)
 
-* Webhooks:
-  * `POST /api/v1/alerts/ingest`
-  * `GET /api/v1/alerts/status/{jobId}`
-* Internal:
-  * `POST /api/internal/alerts/requeue`
+**Webhooks:**
+* `POST /api/v1/alerts/ingest`
+* `GET /api/v1/alerts/status/{jobId}`
+
+**Internal:**
+* `POST /api/internal/alerts/requeue`
 
 **Sample request (`POST /api/v1/alerts/ingest`):**
 ```json
@@ -284,6 +283,7 @@ Resolve AI supports the end-to-end incident lifecycle:
 ### Error Response Pattern
 
 All services use a consistent error envelope mapped via `@RestControllerAdvice`:
+
 ```json
 {
   "success": false,
@@ -304,6 +304,8 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 }
 ```
 
+---
+
 ## 7. Inter-Service Communication Mapping
 
 **Feign Communication (Synchronous)**
@@ -315,20 +317,17 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 
 **Kafka Communication (Asynchronous)**
 
-* **Producer:** `ingestion-service`
-  * **Topic:** `alert.received`
-  * **Events produced:** `alert.created`
-* **Producer:** `triage-service`
-  * **Topic:** `alert.triaged`
-  * **Events produced:** `ticket.duplicate_found`, `ticket.requires_rca`
-* **Producer:** `ai-core-service`
-  * **Topic:** `rca.generated`
-  * **Events produced:** `rca.completed`, `rca.failed`
-* **Consumers:**
-  * `triage-service` (`alert.received`) -> generates vector embeddings and checks deduplication.
-  * `ai-core-service` (`alert.triaged`) -> triggers Spring AI prompt chain for unique issues.
-  * `notification-service` (`rca.generated`) -> dispatches Slack/Jira alerts with the final report.
-  * `audit-storage` (all topics) -> acts as a sink to update the MySQL state machine in real-time.
+| Producer | Topic | Events Produced |
+|---|---|---|
+| `ingestion-service` | `alert.received` | `alert.created` |
+| `triage-service` | `alert.triaged` | `ticket.duplicate_found`, `ticket.requires_rca` |
+| `ai-core-service` | `rca.generated` | `rca.completed`, `rca.failed` |
+
+**Consumers:**
+* `triage-service` (`alert.received`) -> generates vector embeddings and checks deduplication.
+* `ai-core-service` (`alert.triaged`) -> triggers Spring AI prompt chain for unique issues.
+* `notification-service` (`rca.generated`) -> dispatches Slack/Jira alerts with the final report.
+* `audit-storage` (all topics) -> acts as a sink to update the MySQL state machine in real-time.
 
 ---
 
@@ -361,6 +360,8 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 4. AI Core service consumes the triaged event, builds context, calls the LLM, and publishes to `rca.generated`.
 5. Audit Storage consumes from all topics sequentially to update the exact ticket status in MySQL.
 
+---
+
 ## 9. Security Documentation
 
 **Authentication Flow**
@@ -372,13 +373,13 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 **Authorization**
 
 * Gateway injects trusted identity headers (`X-Tenant-Id`, `X-User-Role`) after validation.
-* Downstream services use a `GatewayAuthFilter` to build the Spring SecurityContext from these headers.
+* Downstream services use a `GatewayAuthFilter` to build the Spring `SecurityContext` from these headers.
 * Endpoint-level `@PreAuthorize("hasRole('ROLE_ENGINEER')")` enforces strict access control for RCA reads/updates.
 
 **API Key & Token Notes**
 
-* **Public routes:** `/api/v1/alerts/ingest` (requires valid webhook API key), `/api/auth/login`.
-* **Internal endpoints:** Any route matching `/api/internal/**` is strictly blocked externally at the Gateway level (Forbidden from outside).
+* Public routes: `/api/v1/alerts/ingest` (requires valid webhook API key), `/api/auth/login`.
+* Internal endpoints: Any route matching `/api/internal/**` is strictly blocked externally at the Gateway level (Forbidden from outside).
 * Tokens are stateless, but a Redis-based blacklist is maintained for immediate revocation on logout.
 
 **Gateway-Level Security Controls**
@@ -393,13 +394,13 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 
 **MySQL (Audit & State Schema)**
 
-* `tickets`: `id`, `tenant_id`, `source`, `service_name`, `severity`, `status` (ENUM), `raw_payload`, `created_at`
-* `ticket_rca`: `id`, `ticket_id`, `summary`, `confidence_score`, `recommended_action`, `generated_at`
-* `audit_trail`: `id`, `ticket_id`, `event_type` (RECEIVED, TRIAGED, RCA_COMPLETED), `kafka_topic`, `timestamp`
+* `tickets`: id, tenant_id, source, service_name, severity, status (ENUM), raw_payload, created_at
+* `ticket_rca`: id, ticket_id, summary, confidence_score, recommended_action, generated_at
+* `audit_trail`: id, ticket_id, event_type (RECEIVED, TRIAGED, RCA_COMPLETED), kafka_topic, timestamp
 
 **Vector Database (PgVector / Milvus - Semantic Schema)**
 
-* `incident_embeddings`: `id`, `ticket_id`, `service_name`, `text_chunk` (concatenated stack trace & error message), `embedding_vector` (1536 dimensions)
+* `incident_embeddings`: id, ticket_id, service_name, text_chunk (concatenated stack trace & error message), embedding_vector (1536 dimensions)
 
 **Redis (Cache & State)**
 
@@ -411,8 +412,9 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 * `tickets` 1 -> 1 `ticket_rca` (An incident has exactly one root cause analysis)
 * `tickets` 1 -> many `audit_trail` (A ticket goes through multiple state transitions)
 * `tickets` 1 -> 1 `incident_embeddings` (Each unique ticket gets vectorized for future duplicate checking)
-* `ticket_rca` implicitly uses context from multiple past `tickets` via semantic proximity searches.
+* `ticket_rca` implicitly uses context from multiple past tickets via semantic proximity searches.
 
+---
 
 ## 11. Configuration Management
 
@@ -443,7 +445,7 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 
 **Networking**
 
-* **Shared bridge network:** `resolve_ai_network`
+* Shared bridge network: `resolve_ai_network`
 * Inter-container DNS resolution using exact service names (e.g., `http://audit-storage:8084`).
 
 **Volumes**
@@ -458,24 +460,28 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 * Uses Spring Boot Actuator (`/actuator/health`) for domain services.
 * Uses native container commands for infrastructure (e.g., `mysqladmin ping` for MySQL, `redis-cli ping` for Redis, and native Kafka health checks).
 
-
+---
 
 ## 13. Monitoring & Observability
 
 **Metrics**
+
 * All services expose `/actuator/prometheus`.
 * Prometheus scrapes the API gateway, Kafka brokers, Redis, and all domain services.
 
 **Logging**
+
 * Structured service logs shipped by Promtail/Grafana Alloy from the Docker daemon.
 * Loki stores centralized logs for easy querying.
 * Grafana can query logs and correlate them with distributed traces.
 
 **Tracing**
+
 * Micrometer Tracing (with Zipkin/Tempo) is configured.
 * `traceId` and `spanId` are propagated across synchronous Feign calls and asynchronous Kafka message headers to track an alert from ingestion to RCA generation.
 
 **Dashboards & Alerts**
+
 * Grafana datasources provisioned for Prometheus, Loki, and Tempo.
 * Future scope: Explicit alerting rules for Kafka consumer lag and LLM API latency spikes.
 
@@ -485,35 +491,36 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
 
 ```text
 infrastructure/
-  api-gateway/
-  config-server/
-  eureka-server/
+├── api-gateway/
+├── config-server/
+└── eureka-server/
 services/
-  ingestion/
-  triage/
-  ai-core/
-  audit-storage/
-  notification/
+├── ingestion/
+├── triage/
+├── ai-core/
+├── audit-storage/
+└── notification/
 common/
-  dto-library/
+└── dto-library/
 docker/
-  docker-compose/
-    dev/
-    local/
-    observability/
+└── docker-compose/
+    ├── dev/
+    ├── local/
+    └── observability/
 secrets/
 public/
 web/
 ```
 
-* `infrastructure/*` : platform-level services
-* `services/*` : business microservices
-* `common/dto-library` : shared event contracts and Kafka payload DTOs
-* `docker/docker-compose/dev` : fully containerized environment
-* `docker/docker-compose/local` : infra-only for running services from IDE
-* `docker/docker-compose/observability` : monitoring/logging stack configs
-* `web` : React-based incident triage and RCA dashboard
+* `infrastructure/*`: platform-level services
+* `services/*`: business microservices
+* `common/dto-library`: shared event contracts and Kafka payload DTOs
+* `docker/docker-compose/dev`: fully containerized environment
+* `docker/docker-compose/local`: infra-only for running services from IDE
+* `docker/docker-compose/observability`: monitoring/logging stack configs
+* `web`: React-based incident triage and RCA dashboard
 
+---
 
 ## 15. Design Patterns & Best Practices Used
 
@@ -527,6 +534,8 @@ web/
 * Standardized response/error wrapper
 * Centralized exception handling per service (`@RestControllerAdvice`)
 * Security boundary with gateway + internal API segregation
+
+---
 
 ## 16. Setup Guide
 
@@ -545,7 +554,8 @@ cp .env.example .env
 # Add your OPENAI_API_KEY to .env
 docker-compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d
 ```
-**Access:**
+
+Access:
 * API Gateway: `http://localhost:8080`
 * Eureka: `http://localhost:8761`
 * Grafana: `http://localhost:3000`
@@ -557,20 +567,24 @@ docker-compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d
 ```bash
 cd docker/docker-compose/local
 docker-compose up -d
+```
 
 Then start services in this exact order:
 1. `config-server`
 2. `eureka-server`
 3. `ingestion`, `triage`, `ai-core`, `audit-storage`, `notification`
 4. `api-gateway`
-```
+
+---
 
 ## 17. Testing
 
 **Current Test Coverage in Repo**
+
 * Basic Spring Boot context tests present in all services (`*ApplicationTests`).
 
 **How to Run**
+
 ```bash
 # service-wise
 cd services/ai-core && mvn test
@@ -579,10 +593,12 @@ cd services/triage && mvn test
 ```
 
 **API Testing**
+
 * Use Postman/Insomnia through the gateway (`localhost:8080`).
 * Authenticate first by providing the `X-API-Key` header for protected webhook flows.
 * Validate async side effects (vector embeddings creation, RCA generation, Slack notifications) by checking the `audit-storage` database states.
 
+---
 
 ## 18. Future Improvements
 
@@ -599,17 +615,19 @@ cd services/triage && mvn test
 ## Appendix: Quick API Catalog
 
 **Public/Client APIs by Service**
-* **Ingestion:** `/api/v1/alerts/*`
-* **Triage:** `/api/v1/triage/*`
-* **AI-Core:** `/api/v1/rca/*`
-* **Audit-Storage:** `/api/v1/tickets/*`
-* **Notification:** `/api/v1/notifications/*`
+
+* Ingestion: `/api/v1/alerts/*`
+* Triage: `/api/v1/triage/*`
+* AI-Core: `/api/v1/rca/*`
+* Audit-Storage: `/api/v1/tickets/*`
+* Notification: `/api/v1/notifications/*`
 
 **Internal APIs (service-to-service)**
+
 * `/api/internal/alerts/*`
 * `/api/internal/triage/*`
 * `/api/internal/rca/*`
 * `/api/internal/tickets/*`
 * `/api/internal/notifications/*`
 
-*Note: Gateway blocks external access to internal endpoints.*
+> **Note:** Gateway blocks external access to internal endpoints.
