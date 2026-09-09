@@ -303,3 +303,213 @@ All services use a consistent error envelope mapped via `@RestControllerAdvice`:
   }
 }
 ```
+
+## 7. Inter-Service Communication Mapping
+
+**Feign Communication (Synchronous)**
+
+* `api-gateway` -> `ingestion-service`: route inbound webhook payloads (`POST /api/v1/alerts/ingest`)
+* `triage-service` -> `audit-storage`: fetch historical ticket metadata for duplicate validation (`GET /api/internal/tickets/{ticketId}`)
+* `ai-core-service` -> `audit-storage`: retrieve past RCA contexts for few-shot LLM prompting (`GET /api/internal/tickets/rca-history`)
+* `api-gateway` -> `audit-storage`: dashboard read operations for active tickets and analytics (`GET /api/v1/tickets/...`)
+
+**Kafka Communication (Asynchronous)**
+
+* **Producer:** `ingestion-service`
+  * **Topic:** `alert.received`
+  * **Events produced:** `alert.created`
+* **Producer:** `triage-service`
+  * **Topic:** `alert.triaged`
+  * **Events produced:** `ticket.duplicate_found`, `ticket.requires_rca`
+* **Producer:** `ai-core-service`
+  * **Topic:** `rca.generated`
+  * **Events produced:** `rca.completed`, `rca.failed`
+* **Consumers:**
+  * `triage-service` (`alert.received`) -> generates vector embeddings and checks deduplication.
+  * `ai-core-service` (`alert.triaged`) -> triggers Spring AI prompt chain for unique issues.
+  * `notification-service` (`rca.generated`) -> dispatches Slack/Jira alerts with the final report.
+  * `audit-storage` (all topics) -> acts as a sink to update the MySQL state machine in real-time.
+
+---
+
+## 8. Apache Kafka Configuration
+
+**Topics & Partitions**
+
+* `alert.received`: 3 partitions. Keyed by `service_name` to ensure chronological ordering of alerts from the same source.
+* `alert.triaged`: 3 partitions. Keyed by `incident_id`.
+* `rca.generated`: 3 partitions. Keyed by `incident_id`.
+
+**Consumer Groups**
+
+* `triage-group`: subscribes to `alert.received`.
+* `ai-core-group`: subscribes to `alert.triaged`.
+* `notification-group`: subscribes to `rca.generated`.
+* `audit-group`: wildcard regex subscription (`alert.*`, `rca.*`) for global state tracking.
+
+**Retry / DLQ (Dead Letter Queue)**
+
+* Configured using Spring Kafka `DefaultErrorHandler` with exponential backoff (e.g., retries at 2s, 4s, 8s) for transient failures like Vector DB timeouts.
+* Non-retryable exceptions (e.g., malformed JSON parsing) or exhausted retries are published directly to `<topic_name>.DLT`.
+* DLQ consumers log poison messages for manual intervention without blocking the main partition offset.
+
+**Message Flow**
+
+1. Monitoring webhook (e.g., Datadog) hits Gateway.
+2. Ingestion service publishes raw JSON payload to `alert.received`.
+3. Triage service consumes it, checks Vector DB for duplicates, and publishes result to `alert.triaged`.
+4. AI Core service consumes the triaged event, builds context, calls the LLM, and publishes to `rca.generated`.
+5. Audit Storage consumes from all topics sequentially to update the exact ticket status in MySQL.
+
+## 9. Security Documentation
+
+**Authentication Flow**
+
+* **Webhooks (Machine-to-Machine):** Monitoring tools (Datadog, Sentry) authenticate via `X-API-Key` or HMAC signatures in the request headers.
+* **Dashboard Users:** Engineers log in via auth service and receive JWT access + refresh tokens. Access tokens are signed with RSA private keys.
+* API Gateway validates the API Keys (for webhooks) and parses JWTs (for dashboard requests).
+
+**Authorization**
+
+* Gateway injects trusted identity headers (`X-Tenant-Id`, `X-User-Role`) after validation.
+* Downstream services use a `GatewayAuthFilter` to build the Spring SecurityContext from these headers.
+* Endpoint-level `@PreAuthorize("hasRole('ROLE_ENGINEER')")` enforces strict access control for RCA reads/updates.
+
+**API Key & Token Notes**
+
+* **Public routes:** `/api/v1/alerts/ingest` (requires valid webhook API key), `/api/auth/login`.
+* **Internal endpoints:** Any route matching `/api/internal/**` is strictly blocked externally at the Gateway level (Forbidden from outside).
+* Tokens are stateless, but a Redis-based blacklist is maintained for immediate revocation on logout.
+
+**Gateway-Level Security Controls**
+
+* **Token & Key Validation:** Validates JWT claims or matching API keys against configured tenant secrets.
+* **Anti-Header-Spoofing:** Actively removes client-supplied `X-Tenant-Id` or `X-User-*` headers to prevent malicious privilege escalation, replacing them with verified values.
+* **Rate Limiting (Redis):** Strict route-specific policies (e.g., webhook ingestion is capped at 1000 req/sec per tenant to prevent DDoS during cascading system failures).
+
+---
+
+## 10. Database Design
+
+**MySQL (Audit & State Schema)**
+
+* `tickets`: `id`, `tenant_id`, `source`, `service_name`, `severity`, `status` (ENUM), `raw_payload`, `created_at`
+* `ticket_rca`: `id`, `ticket_id`, `summary`, `confidence_score`, `recommended_action`, `generated_at`
+* `audit_trail`: `id`, `ticket_id`, `event_type` (RECEIVED, TRIAGED, RCA_COMPLETED), `kafka_topic`, `timestamp`
+
+**Vector Database (PgVector / Milvus - Semantic Schema)**
+
+* `incident_embeddings`: `id`, `ticket_id`, `service_name`, `text_chunk` (concatenated stack trace & error message), `embedding_vector` (1536 dimensions)
+
+**Redis (Cache & State)**
+
+* `rate_limiter`: Tracks API Gateway request counts per tenant.
+* `deduplication_locks`: Distributed locks to prevent race conditions when simultaneous duplicate alerts arrive.
+
+**Relationship Overview (Text ER)**
+
+* `tickets` 1 -> 1 `ticket_rca` (An incident has exactly one root cause analysis)
+* `tickets` 1 -> many `audit_trail` (A ticket goes through multiple state transitions)
+* `tickets` 1 -> 1 `incident_embeddings` (Each unique ticket gets vectorized for future duplicate checking)
+* `ticket_rca` implicitly uses context from multiple past `tickets` via semantic proximity searches.
+
+
+## 11. Configuration Management
+
+* **Config Import:** Services import configuration via `spring.config.import=configserver:http://localhost:8888`.
+* **Git Sourcing:** Config server sources properties dynamically from a dedicated Git repository (e.g., `resolve-ai-config`).
+* **Profiles:** Primarily `dev` for local execution, with a `docker` overlay for the containerized runtime.
+* **Dynamic Refresh:** Spring Cloud Bus refresh endpoint (`/actuator/busrefresh`) is available to propagate config updates across services without downtime (e.g., updating LLM prompt templates or similarity thresholds).
+* **Encryption:** Encryption support is enabled in the config server (`encrypt.key`) to securely serve `{cipher}` values like database passwords.
+* **Secret Handling Expectation:**
+  * Keep `.env` files out of VCS (Git).
+  * Inject sensitive keys (e.g., `OPENAI_API_KEY`, Webhook HMAC secrets) via environment variables or a secrets manager in production.
+  * Keep API Gateway RSA/JWT keys under a mounted secret path in the container.
+
+---
+
+## 12. Docker & Deployment
+
+**Docker Compose Layers**
+
+* `infra.yaml`: Apache Kafka (Broker + Zookeeper/KRaft), Redis
+* `databases.yaml`: MySQL, Vector DB (PgVector or ChromaDB)
+* `services.yaml`: config-server, eureka-server, all core AI/domain services, api-gateway
+* `observability-and-monitoring.yaml`: Prometheus, Grafana, Micrometer/Tempo (for tracing)
+
+**Startup Order**
+
+`infra` -> `db` -> `config-server` -> `eureka` -> `business services` -> `api-gateway`
+
+**Networking**
+
+* **Shared bridge network:** `resolve_ai_network`
+* Inter-container DNS resolution using exact service names (e.g., `http://audit-storage:8084`).
+
+**Volumes**
+
+* Persistent data mounts for MySQL (`/var/lib/mysql`), Vector DB, Kafka logs, and Redis.
+* Mounted `init-db.sql` for automated schema and user generation upon MySQL startup.
+* Mounted configuration directories for Grafana dashboards and Prometheus scrape configs.
+
+**Health Checks**
+
+* Configured heavily across all containers to ensure the strict startup order.
+* Uses Spring Boot Actuator (`/actuator/health`) for domain services.
+* Uses native container commands for infrastructure (e.g., `mysqladmin ping` for MySQL, `redis-cli ping` for Redis, and native Kafka health checks).
+
+
+
+## 13. Monitoring & Observability
+
+**Metrics**
+* All services expose `/actuator/prometheus`.
+* Prometheus scrapes the API gateway, Kafka brokers, Redis, and all domain services.
+
+**Logging**
+* Structured service logs shipped by Promtail/Grafana Alloy from the Docker daemon.
+* Loki stores centralized logs for easy querying.
+* Grafana can query logs and correlate them with distributed traces.
+
+**Tracing**
+* Micrometer Tracing (with Zipkin/Tempo) is configured.
+* `traceId` and `spanId` are propagated across synchronous Feign calls and asynchronous Kafka message headers to track an alert from ingestion to RCA generation.
+
+**Dashboards & Alerts**
+* Grafana datasources provisioned for Prometheus, Loki, and Tempo.
+* Future scope: Explicit alerting rules for Kafka consumer lag and LLM API latency spikes.
+
+---
+
+## 14. Folder Structure
+
+```text
+infrastructure/
+  api-gateway/
+  config-server/
+  eureka-server/
+services/
+  ingestion/
+  triage/
+  ai-core/
+  audit-storage/
+  notification/
+common/
+  dto-library/
+docker/
+  docker-compose/
+    dev/
+    local/
+    observability/
+secrets/
+public/
+web/
+```
+
+* `infrastructure/*` : platform-level services
+* `services/*` : business microservices
+* `common/dto-library` : shared event contracts and Kafka payload DTOs
+* `docker/docker-compose/dev` : fully containerized environment
+* `docker/docker-compose/local` : infra-only for running services from IDE
+* `docker/docker-compose/observability` : monitoring/logging stack configs
+* `web` : React-based incident triage and RCA dashboard
