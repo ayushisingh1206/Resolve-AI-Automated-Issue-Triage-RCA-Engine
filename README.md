@@ -9,7 +9,7 @@ Enterprise-grade event-driven AIOps platform built using Spring Boot microservic
 ![Docker](https://img.shields.io/badge/Docker-containerized-2496ED)
 ![MySQL](https://img.shields.io/badge/MySQL-relational%20store-4479A1)
 
- ![Resolve AI System Architecture](./docs/architecture-diagram.png) 
+![Resolve AI System Architecture](./architecture-diagram.png)
 
 ---
 
